@@ -24,7 +24,9 @@ I'm putting it up here for free. It does exactly one thing, it does it offline, 
 
 ## 📸 Before & After
 
-![Before and After](https://github.com/user-attachments/assets/7c8b55da-c720-417c-b756-79c67cd88766)
+![Before](https://github.com/user-attachments/assets/7c8b55da-c720-417c-b756-79c67cd88766)
+
+![After](https://github.com/user-attachments/assets/80994206-ef90-4c5d-90bb-bed6a5d8ab4c)
 
 ---
 
