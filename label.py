@@ -1,0 +1,215 @@
+import os
+import sys
+import tkinter as tk
+from PIL import Image, ImageDraw, ImageFont, ImageTk
+
+ROOMS = {
+    "fe": "Front Exterior",
+    "re": "Rear Exterior",
+    "le": "Left Exterior",
+    "rie": "Right Exterior",
+    "hall": "Hallway",
+    "lr": "Living Room",
+    "dr": "Dining Room",
+    "k": "Kitchen",
+    "lau": "Laundry Room",
+    "ba": "Bathroom",
+    "ba1": "Bathroom 1",
+    "ba2": "Bathroom 2",
+    "be1": "Bedroom 1",
+    "be2": "Bedroom 2",
+    "be3": "Bedroom 3",
+    "be4": "Bedroom 4",
+    "bs": "Basement",
+    "at": "Attic",
+    "ga": "Garage",
+    "me": "Mechanical Room",
+    "el": "Electrical Panel",
+    "rf": "Roof",
+    "cr": "Crawlspace"
+}
+
+EXTENSIONS = (".jpg", ".jpeg", ".png")
+
+# Determine source folder
+if len(sys.argv) > 1:
+    image_folder = sys.argv[1]
+else:
+    image_folder = os.getcwd()
+
+output_folder = os.path.join(image_folder, "labelled")
+os.makedirs(output_folder, exist_ok=True)
+
+progress_file = os.path.join(output_folder, "_progress.txt")
+
+address = input("\nProperty Address: ").strip()
+
+images = sorted(
+    f for f in os.listdir(image_folder)
+    if f.lower().endswith(EXTENSIONS)
+)
+
+if not images:
+    print("No images found.")
+    sys.exit(1)
+
+print("\nRoom Shortcuts:")
+for code, room in sorted(ROOMS.items()):
+    print(f"{code:5} = {room}")
+print(f"{'cs':5} = Custom Room Name (type from keyboard)")
+
+previous_room = ""
+previous_percent = ""
+start_index = 0
+
+if os.path.exists(progress_file):
+    try:
+        with open(progress_file, "r") as f:
+            start_index = int(f.read().strip())
+            print(f"\nResuming from image {start_index + 1}")
+    except:
+        start_index = 0
+
+# --- SETUP IMAGE VIEWER WINDOW ---
+root = tk.Tk()
+root.title("Photo Labeler Viewer")
+# Set a reasonable max window size for viewing
+root.geometry("800x800")
+img_label = tk.Label(root)
+img_label.pack(expand=True, fill="both")
+# ---------------------------------
+
+for index in range(start_index, len(images)):
+
+    filename = images[index]
+    image_path = os.path.join(image_folder, filename)
+
+    print(f"\n[{index+1}/{len(images)}] {filename}")
+
+    # --- OPEN AND DISPLAY IMAGE BEFORE ASKING FOR INPUT ---
+    img = Image.open(image_path).convert("RGBA")
+    
+    # Create a display copy so we don't shrink the actual image being saved
+    display_img = img.copy()
+    display_img.thumbnail((800, 800)) # Shrinks to fit window, keeps aspect ratio
+    tk_img = ImageTk.PhotoImage(display_img)
+    img_label.config(image=tk_img)
+    img_label.image = tk_img # Keep a reference so it doesn't disappear
+    root.update() # Refreshes the window immediately
+    # -------------------------------------------------------
+
+    room_input = input(
+        f"Room ({previous_room if previous_room else 'enter room'}): "
+    ).strip()
+
+    # quit and save progress
+    if room_input.lower() in ("q", "quit", "exit"):
+        with open(progress_file, "w") as f:
+            f.write(str(index))
+        print("\nProgress saved.")
+        root.destroy() # Close the image window
+        sys.exit(0)
+
+    # skip photo
+    if room_input.lower() == "s":
+        continue
+
+    # custom room input
+    if room_input.lower() == "cs":
+        room_name = input("Enter custom room name: ").strip()
+        previous_room = room_name
+    elif room_input == "":
+        if not previous_room:
+            print("No previous room.")
+            continue
+        room_name = previous_room
+    else:
+        room_name = ROOMS.get(room_input.lower(), room_input)
+        previous_room = room_name
+
+    percent_input = input(
+        f"Percent Complete ({previous_percent if previous_percent else 'enter %'}): "
+    ).strip()
+
+    if percent_input == "":
+        if not previous_percent:
+            print("No previous percent.")
+            continue
+        percent_complete = previous_percent
+    else:
+        try:
+            pct = int(percent_input)
+            if pct < 0 or pct > 100:
+                print("Percent must be 0-100.")
+                continue
+        except:
+            print("Invalid percent.")
+            continue
+
+        percent_complete = percent_input
+        previous_percent = percent_input
+
+    width, height = img.size
+
+    try:
+        font_size = max(24, width // 45)
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except:
+        font = ImageFont.load_default()
+
+    draw = ImageDraw.Draw(img)
+
+    line1 = address
+    line2 = room_name
+    line3 = f"{percent_complete}% Complete"
+
+    bbox1 = draw.textbbox((0, 0), line1, font=font)
+    bbox2 = draw.textbbox((0, 0), line2, font=font)
+    bbox3 = draw.textbbox((0, 0), line3, font=font)
+
+    text_height = (
+        (bbox1[3] - bbox1[1]) +
+        (bbox2[3] - bbox2[1]) +
+        (bbox3[3] - bbox3[1]) +
+        60
+    )
+
+    banner_height = text_height + 20
+
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    overlay_draw = ImageDraw.Draw(overlay)
+
+    overlay_draw.rectangle(
+        [(0, height - banner_height), (width, height)],
+        fill=(0, 0, 0, 160)
+    )
+
+    img = Image.alpha_composite(img, overlay)
+
+    draw = ImageDraw.Draw(img)
+
+    y = height - banner_height + 10
+
+    draw.text((20, y), line1, fill="white", font=font)
+    y += (bbox1[3] - bbox1[1]) + 10
+
+    draw.text((20, y), line2, fill="white", font=font)
+    y += (bbox2[3] - bbox2[1]) + 10
+
+    draw.text((20, y), line3, fill="white", font=font)
+
+    output_path = os.path.join(output_folder, filename)
+
+    img.convert("RGB").save(output_path, quality=95)
+
+    with open(progress_file, "w") as f:
+        f.write(str(index + 1))
+
+# Close the window when all images are done
+root.destroy()
+
+print("\nDone.")
+print(f"Saved labelled photos to:\n{output_folder}")
+
+if os.path.exists(progress_file):
+    os.remove(progress_file)
